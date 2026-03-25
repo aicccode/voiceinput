@@ -12,8 +12,8 @@
 
 ## Features
 
-- **100% Offline** — Whisper AI model runs locally. No internet, no cloud, no data leaves your machine.
-- **Lightweight Binary** — Small executable (~15MB). Model auto-downloads on first launch.
+- **Local Inference** — Whisper AI model runs entirely on your machine. After first-launch model download, no internet needed and no data ever leaves your device.
+- **Lightweight Binary** — Small executable (~15MB), download and run. The ~466MB model is fetched automatically on first launch (with resume support).
 - **Global Hotkey** — Works in any application. No window switching needed.
 - **Cross-Platform** — Linux, Windows, macOS.
 - **Real-time Waveform** — Visual feedback while recording.
