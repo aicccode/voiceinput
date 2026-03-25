@@ -82,6 +82,9 @@ pub struct GeneralConfig {
     /// Log level
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    /// Model download mirror: "auto", "cn" (hf-mirror.com), "global" (huggingface.co)
+    #[serde(default = "default_mirror")]
+    pub mirror: String,
 }
 
 // Default value functions
@@ -99,6 +102,7 @@ fn default_opacity() -> f64 { 0.92 }
 fn default_theme() -> String { "auto".to_string() }
 fn default_true() -> bool { true }
 fn default_log_level() -> String { "info".to_string() }
+fn default_mirror() -> String { "auto".to_string() }
 
 impl Default for AppConfig {
     fn default() -> Self {
@@ -159,6 +163,7 @@ impl Default for GeneralConfig {
             auto_start: false,
             show_tray: true,
             log_level: default_log_level(),
+            mirror: default_mirror(),
         }
     }
 }

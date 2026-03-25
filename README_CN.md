@@ -13,29 +13,30 @@
 ## 特性
 
 - **完全离线** — Whisper AI 模型本地运行，不联网、不上传、数据不出设备
-- **单文件分发** — 一个可执行文件（约 500MB，模型内嵌），下载即用
+- **轻量分发** — 可执行文件仅约 15MB，首次启动自动下载模型
 - **全局热键** — 在任何应用中按住右 Ctrl 即可语音输入，无需切换窗口
 - **跨平台** — 支持 Linux、Windows、macOS
 - **实时波形** — 录音时实时显示声音波形
 - **中文优化** — 针对中文语音优化，支持中英混合，自动补全标点
 - **系统托盘** — 后台静默运行，仅显示托盘图标
+- **断点续传** — 模型下载中断后，重启自动继续
 
 ## 使用流程
 
 ```
 按住右Ctrl  →  说话  →  松开右Ctrl  →  Ctrl+V 粘贴
      ┌────────────────────────────────────┐
-     │  🎙️ 正在聆听... (实时波形显示)      │
+     │  正在聆听... (实时波形显示)          │
      │  录音时长: 3.2s                     │
      └────────────────────────────────────┘
               ↓ 松开按键
      ┌────────────────────────────────────┐
-     │  ⏳ 正在识别...                     │
+     │  正在识别...                        │
      └────────────────────────────────────┘
               ↓ 识别完成
      ┌────────────────────────────────────┐
-     │  ✅ 你好世界这是语音输入测试          │
-     │  已复制到剪贴板                      │
+     │  你好世界这是语音输入测试            │
+     │  已复制到剪贴板                     │
      └────────────────────────────────────┘
 ```
 
@@ -62,7 +63,11 @@ chmod +x voiceinput
 voiceinput.exe
 ```
 
-首次启动会解压内嵌模型到本地缓存（约 466MB，仅需一次）。后续启动秒开。
+首次启动会自动下载 Whisper 语音模型（约 466MB），下载支持断点续传。
+
+- **中国用户**：自动检测系统语言，从 `hf-mirror.com` 下载（国内镜像，速度快）
+- **海外用户**：从 `huggingface.co` 下载
+- **手动指定**：在配置文件中设置 `mirror = "cn"` 或 `mirror = "global"`
 
 ### 使用
 
@@ -95,6 +100,7 @@ threads = 0                # 推理线程数，0 = 自动
 
 [general]
 log_level = "info"         # 日志级别: debug, info, warn, error
+mirror = "auto"            # 模型下载镜像: "auto"(自动), "cn"(国内镜像), "global"(国际)
 ```
 
 ## 从源码构建
@@ -120,13 +126,10 @@ sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev \
 git clone https://github.com/YOUR_USERNAME/voiceinput.git
 cd voiceinput
 
-# 下载 Whisper 模型（国内镜像）
-curl -LO https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
-
-# 开发构建（不嵌入模型，编译快，需要模型文件在旁边）
+# 开发构建（首次运行自动下载模型）
 cd src-tauri && cargo build
 
-# 发布构建（模型嵌入到可执行文件中，单文件分发）
+# 发布构建
 cd src-tauri && cargo build --release
 ```
 
@@ -152,6 +155,7 @@ git push origin v1.0.0
 | 音频采集 | cpal（ALSA/PulseAudio/WASAPI/CoreAudio） |
 | 全局热键 | rdev（全局键盘钩子） |
 | 剪贴板 | arboard |
+| HTTP | ureq（模型下载） |
 | 模型 | Whisper Small（约 466MB，MIT 许可证） |
 
 ## 系统要求
@@ -161,6 +165,7 @@ git push origin v1.0.0
 | CPU | 4 核，支持 AVX2 指令集（2013 年后的 Intel/AMD） |
 | 内存 | 8 GB |
 | 硬盘 | 500 MB 可用空间 |
+| 网络 | 首次启动需要联网下载模型 |
 | 麦克风 | 任意音频输入设备 |
 | GPU | 不需要（纯 CPU 推理） |
 

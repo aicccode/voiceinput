@@ -8,8 +8,6 @@ build = "build.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
-sha2 = "0.10"
-hex = "0.4"
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
@@ -25,8 +23,8 @@ dirs = "6"
 log = "0.4"
 env_logger = "0.11"
 parking_lot = "0.12"
+ureq = "2"
 
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-embed-model = []

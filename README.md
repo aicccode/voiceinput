@@ -13,28 +13,29 @@
 ## Features
 
 - **100% Offline** — Whisper AI model runs locally. No internet, no cloud, no data leaves your machine.
-- **Single File** — One executable (~500MB with embedded model). Download, run, done.
+- **Lightweight Binary** — Small executable (~15MB). Model auto-downloads on first launch.
 - **Global Hotkey** — Works in any application. No window switching needed.
 - **Cross-Platform** — Linux, Windows, macOS.
 - **Real-time Waveform** — Visual feedback while recording.
 - **Chinese Optimized** — Tuned for Chinese speech with punctuation post-processing. English works too.
 - **System Tray** — Runs silently in the background. No taskbar clutter.
+- **Resume Downloads** — Model download supports resume from interruption.
 
 ## How It Works
 
 ```
 Hold Right Ctrl  →  Speak  →  Release Right Ctrl  →  Ctrl+V to paste
      ┌────────────────────────────────────┐
-     │  🎙️ Recording... (waveform shown)  │
+     │  Recording... (waveform shown)     │
      │  "正在聆听..."                      │
      └────────────────────────────────────┘
               ↓ release key
      ┌────────────────────────────────────┐
-     │  ⏳ Transcribing...                │
+     │  Transcribing...                   │
      └────────────────────────────────────┘
               ↓ done
      ┌────────────────────────────────────┐
-     │  ✅ 你好世界这是语音输入测试         │
+     │  你好世界这是语音输入测试            │
      │  Copied to clipboard               │
      └────────────────────────────────────┘
 ```
@@ -62,7 +63,11 @@ chmod +x voiceinput
 voiceinput.exe
 ```
 
-On first launch, the embedded model extracts to a local cache (~466MB, one-time only). Subsequent launches are instant.
+On first launch, the Whisper model (~466MB) is automatically downloaded. The download supports resume — if interrupted, it will continue from where it left off on next launch.
+
+- **China users**: Model is downloaded from `hf-mirror.com` (auto-detected from system locale).
+- **Other regions**: Model is downloaded from `huggingface.co`.
+- **Manual override**: Set `mirror = "cn"` or `mirror = "global"` in config file (see below).
 
 ### Use
 
@@ -95,6 +100,7 @@ threads = 0                # 0 = auto (CPU cores - 1)
 
 [general]
 log_level = "info"         # debug, info, warn, error
+mirror = "auto"            # Model download: "auto", "cn", "global"
 ```
 
 ## Build from Source
@@ -120,15 +126,25 @@ sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev \
 git clone https://github.com/YOUR_USERNAME/voiceinput.git
 cd voiceinput
 
-# Download a whisper model
-curl -LO https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
-
-# Dev build (model loaded from file, fast compile)
+# Dev build (model auto-downloads on first run)
 cd src-tauri && cargo build
 
-# Release build (model embedded in binary)
+# Release build
 cd src-tauri && cargo build --release
 ```
+
+### GitHub Actions
+
+Push a tag to auto-build for all platforms:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+# → GitHub Actions builds Linux/Windows/macOS
+# → Artifacts published to GitHub Releases
+```
+
+You can also trigger builds manually from the Actions page.
 
 ## Tech Stack
 
@@ -139,6 +155,7 @@ cd src-tauri && cargo build --release
 | Audio Capture | cpal (ALSA/PulseAudio/WASAPI/CoreAudio) |
 | Hotkey | rdev (global keyboard hook) |
 | Clipboard | arboard |
+| HTTP | ureq (model download) |
 | Model | Whisper Small (~466MB, MIT license) |
 
 ## System Requirements
@@ -148,6 +165,7 @@ cd src-tauri && cargo build --release
 | CPU | 4 cores, AVX2 support (2013+ Intel/AMD) |
 | RAM | 8 GB |
 | Disk | 500 MB free |
+| Network | Required for first launch (model download) |
 | Microphone | Any audio input device |
 | GPU | Not required |
 

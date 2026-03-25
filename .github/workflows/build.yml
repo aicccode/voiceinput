@@ -4,10 +4,7 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:  # 允许手动触发
-
-env:
-  MODEL_URL: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+  workflow_dispatch:  # allow manual trigger
 
 jobs:
   build:
@@ -51,27 +48,9 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install llvm -y
 
-      - name: Add swap space (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo fallocate -l 8G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          free -h
-
-      - name: Download whisper model
-        shell: bash
-        run: |
-          echo "Downloading ggml-small.bin (~466MB)..."
-          curl -L -o ggml-small.bin "$MODEL_URL"
-          ls -lh ggml-small.bin
-
-      - name: Build (release, model embedded)
+      - name: Build (release)
         working-directory: src-tauri
         shell: bash
-        env:
-          CARGO_BUILD_JOBS: "2"
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare artifact

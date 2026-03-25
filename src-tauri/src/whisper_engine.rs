@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 /// Minimum expected file sizes for each model type (bytes).
-/// These are conservative lower bounds for valid GGML whisper models.
 const MIN_MODEL_SIZES: &[(&str, u64)] = &[
     ("tiny", 70_000_000),    // ~75 MB
     ("base", 140_000_000),   // ~141 MB
@@ -19,10 +18,7 @@ impl WhisperEngine {
     /// Initialize whisper engine from model file path
     pub fn new(model_path: &str) -> Result<Self, String> {
         log::info!("Loading whisper model from: {}", model_path);
-
-        // Validate model file before loading to prevent segfault on truncated files
         validate_model_file(model_path)?;
-
         let params = WhisperContextParameters::default();
         let ctx = WhisperContext::new_with_params(model_path, params)
             .map_err(|e| format!("Failed to load whisper model: {}", e))?;
@@ -54,7 +50,6 @@ impl WhisperEngine {
         params.set_suppress_blank(true);
         params.set_temperature(0.0);
 
-        // Set number of threads (0 = auto)
         let threads = if threads_config > 0 {
             threads_config
         } else {
@@ -95,8 +90,6 @@ impl WhisperEngine {
 }
 
 /// Validate that a GGML model file is complete and not truncated.
-/// Reads the header to determine model type, then checks file size against
-/// minimum expected size. Prevents segfaults from loading truncated models.
 fn validate_model_file(path: &str) -> Result<(), String> {
     use std::fs;
     use std::io::Read;
@@ -105,15 +98,13 @@ fn validate_model_file(path: &str) -> Result<(), String> {
         .map_err(|e| format!("Cannot read model file '{}': {}", path, e))?;
     let file_size = metadata.len();
 
-    // Read GGML header to determine model type
     let mut file = fs::File::open(path)
         .map_err(|e| format!("Cannot open model file: {}", e))?;
 
-    let mut header = [0u8; 28]; // magic(4) + n_vocab(4) + n_audio_ctx(4) + n_audio_state(4) + n_audio_head(4) + n_audio_layer(4) + n_text_ctx(4)
+    let mut header = [0u8; 28];
     file.read_exact(&mut header)
         .map_err(|e| format!("Cannot read model header: {}", e))?;
 
-    // Verify GGML magic number (0x67676d6c in little-endian)
     let magic = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
     if magic != 0x67676d6c {
         return Err(format!(
@@ -122,7 +113,6 @@ fn validate_model_file(path: &str) -> Result<(), String> {
         ));
     }
 
-    // Determine model type from n_audio_layer (offset 20)
     let n_audio_layer = u32::from_le_bytes([header[20], header[21], header[22], header[23]]);
     let model_type = match n_audio_layer {
         4 => "tiny",
@@ -136,7 +126,6 @@ fn validate_model_file(path: &str) -> Result<(), String> {
         }
     };
 
-    // Check file size against minimum for this model type
     if let Some((_, min_size)) = MIN_MODEL_SIZES.iter().find(|(name, _)| *name == model_type) {
         if file_size < *min_size {
             return Err(format!(
@@ -168,95 +157,11 @@ pub fn model_cache_path() -> PathBuf {
     cache_dir.join("ggml-small.bin")
 }
 
-/// Ensure model file exists at cache path.
-/// In embed mode: extract from binary if not cached.
-/// In dev mode: look for model file in project directory or env var.
-#[allow(unused_variables)]
-pub fn ensure_model(project_dir: Option<&str>) -> Result<String, String> {
-    let cache_path = model_cache_path();
-
-    // If cached model exists, validate and use it
-    if cache_path.exists() {
-        let path_str = cache_path.to_string_lossy().to_string();
-        match validate_model_file(&path_str) {
-            Ok(()) => {
-                log::info!("Using cached model: {}", cache_path.display());
-                return Ok(path_str);
-            }
-            Err(e) => {
-                log::warn!("Cached model invalid, removing: {}", e);
-                let _ = std::fs::remove_file(&cache_path);
-            }
-        }
+/// Check if the cached model exists and is valid
+pub fn model_is_ready() -> bool {
+    let path = model_cache_path();
+    if !path.exists() {
+        return false;
     }
-
-    #[cfg(embed_model)]
-    {
-        use std::fs;
-        // Extract embedded model to cache
-        log::info!("Extracting embedded model to: {}", cache_path.display());
-        let model_data: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../ggml-small.bin"));
-
-        if let Some(parent) = cache_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create cache dir: {}", e))?;
-        }
-
-        fs::write(&cache_path, model_data)
-            .map_err(|e| format!("Failed to write model to cache: {}", e))?;
-
-        log::info!("Model extracted ({} bytes)", model_data.len());
-        return Ok(cache_path.to_string_lossy().to_string());
-    }
-
-    #[cfg(dev_mode)]
-    {
-        // Dev mode: try env var, then project directory
-        if let Ok(path) = std::env::var("VOICEINPUT_MODEL_PATH") {
-            if std::path::Path::new(&path).exists() {
-                match validate_model_file(&path) {
-                    Ok(()) => {
-                        log::info!("Dev mode: using model from env: {}", path);
-                        return Ok(path);
-                    }
-                    Err(e) => {
-                        log::warn!("Model from env invalid: {}", e);
-                    }
-                }
-            }
-        }
-
-        // Try project directory - search for models in priority order
-        let names = ["ggml-small.bin", "ggml-base.bin"];
-        let mut candidates: Vec<PathBuf> = Vec::new();
-        for name in &names {
-            if let Some(dir) = project_dir {
-                candidates.push(PathBuf::from(dir).join(name));
-            }
-            candidates.push(PathBuf::from(name));
-            candidates.push(PathBuf::from("..").join(name));
-        }
-
-        for candidate in &candidates {
-            if candidate.exists() {
-                let path = candidate.to_string_lossy().to_string();
-                match validate_model_file(&path) {
-                    Ok(()) => {
-                        log::info!("Dev mode: using model from: {}", path);
-                        return Ok(path);
-                    }
-                    Err(e) => {
-                        log::warn!("Skipping invalid model {}: {}", path, e);
-                    }
-                }
-            }
-        }
-
-        Err("No valid model file found. Set VOICEINPUT_MODEL_PATH or place ggml-small.bin / ggml-base.bin in project root.".to_string())
-    }
-
-    #[cfg(not(any(embed_model, dev_mode)))]
-    {
-        Err("No model available. Build with embed-model feature or set VOICEINPUT_DEV=1".to_string())
-    }
+    validate_model_file(&path.to_string_lossy()).is_ok()
 }

@@ -4,6 +4,7 @@ mod audio;
 mod clipboard;
 mod config;
 mod hotkey;
+mod model_downloader;
 mod punctuation;
 mod state;
 mod tray;
@@ -15,21 +16,20 @@ use config::AppConfig;
 use parking_lot::Mutex;
 use state::{AppState, AppStateManager};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Emitter, Manager};
 
 struct AppData {
     config: AppConfig,
     state: AppStateManager,
     recorder: Mutex<AudioRecorder>,
-    whisper: Option<whisper_engine::WhisperEngine>,
+    whisper: OnceLock<whisper_engine::WhisperEngine>,
     clipboard: ClipboardManager,
     /// Monotonically increasing recording session ID for timeout cancellation
     recording_session: AtomicU64,
 }
 
 fn main() {
-    // Load config first
     let cfg = config::load_config();
 
     env_logger::Builder::from_env(
@@ -40,42 +40,11 @@ fn main() {
     log::info!("VoiceInput starting...");
     log::info!("Config: {:?}", config::config_path());
 
-    // Resolve project root directory for model search.
-    // Use the executable's directory so model lookup works regardless of CWD.
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_string_lossy().to_string()));
-    let project_dir = exe_dir.as_deref();
-
-    // Ensure model is available
-    let model_path = match whisper_engine::ensure_model(project_dir) {
-        Ok(path) => path,
-        Err(e) => {
-            log::error!("Model not available: {}", e);
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    // Load whisper model
-    log::info!("Loading whisper model...");
-    let whisper = match whisper_engine::WhisperEngine::new(&model_path) {
-        Ok(w) => {
-            log::info!("Whisper model loaded successfully");
-            Some(w)
-        }
-        Err(e) => {
-            log::error!("Failed to load whisper model: {}", e);
-            eprintln!("Warning: Whisper model failed to load: {}", e);
-            None
-        }
-    };
-
     let app_data = Arc::new(AppData {
         config: cfg.clone(),
         state: AppStateManager::new(),
         recorder: Mutex::new(AudioRecorder::new()),
-        whisper,
+        whisper: OnceLock::new(),
         clipboard: ClipboardManager::new(),
         recording_session: AtomicU64::new(0),
     });
@@ -89,25 +58,88 @@ fn main() {
             // Build tray menu
             tray::setup_tray(&handle)?;
 
-            // Start global hotkey listener with configured debounce
+            // Start global hotkey listener
             let hotkey_rx = hotkey::start_listener(data.config.hotkey.min_hold_ms);
-
-            // Hotkey event loop
             let handle2 = handle.clone();
+            let data2 = data.clone();
             std::thread::spawn(move || {
-                hotkey_event_loop(handle2, data, hotkey_rx);
+                hotkey_event_loop(handle2, data2, hotkey_rx);
             });
 
-            // Hide main window on startup (tray-only mode)
-            if let Some(window) = handle.get_webview_window("overlay") {
-                let _ = window.hide();
-            }
+            // Model initialization in background thread
+            let handle3 = handle.clone();
+            let data3 = data.clone();
+            std::thread::spawn(move || {
+                init_model(handle3, data3);
+            });
 
+            // Overlay starts hidden (configured in tauri.conf.json)
             log::info!("VoiceInput ready");
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Download (if needed) and load the whisper model.
+/// Emits progress events to the frontend overlay.
+fn init_model(handle: AppHandle, data: Arc<AppData>) {
+    let cache_path = whisper_engine::model_cache_path();
+    let needs_download = !whisper_engine::model_is_ready();
+
+    if needs_download {
+        log::info!("Model not found at {:?}, starting download...", cache_path);
+        let _ = handle.emit("state-change", "downloading");
+        show_overlay(&handle);
+
+        let url = model_downloader::get_download_url(&data.config.general.mirror);
+        let handle_progress = handle.clone();
+
+        let result = model_downloader::download_model(&cache_path, url, move |progress| {
+            let _ = handle_progress.emit("download-progress", &progress);
+        });
+
+        if let Err(e) = result {
+            log::error!("Model download failed: {}", e);
+            let _ = handle.emit("download-error", &e);
+            return;
+        }
+
+        // Validate downloaded model
+        if !whisper_engine::model_is_ready() {
+            log::error!("Downloaded model is invalid");
+            let _ = std::fs::remove_file(&cache_path);
+            let _ = handle.emit(
+                "download-error",
+                "Downloaded model is invalid, please restart to retry",
+            );
+            return;
+        }
+    }
+
+    // Load model
+    log::info!("Loading whisper model...");
+    if needs_download {
+        let _ = handle.emit("state-change", "loading");
+    }
+
+    let model_path = cache_path.to_string_lossy().to_string();
+    match whisper_engine::WhisperEngine::new(&model_path) {
+        Ok(engine) => {
+            let _ = data.whisper.set(engine);
+            log::info!("Whisper model loaded and ready");
+            let _ = handle.emit("model-ready", true);
+            if needs_download {
+                hide_overlay(&handle);
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to load whisper model: {}", e);
+            if needs_download {
+                let _ = handle.emit("download-error", format!("Failed to load model: {}", e));
+            }
+        }
+    }
 }
 
 fn hotkey_event_loop(
@@ -132,6 +164,12 @@ fn hotkey_event_loop(
 
 fn handle_key_press(handle: &AppHandle, data: &Arc<AppData>) {
     if !data.state.is_idle() {
+        return;
+    }
+
+    // Check if model is ready
+    if data.whisper.get().is_none() {
+        let _ = handle.emit("error", "语音模型正在加载中，请稍后再试");
         return;
     }
 
@@ -162,7 +200,6 @@ fn handle_key_press(handle: &AppHandle, data: &Arc<AppData>) {
             let timeout_data = data.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_secs(timeout_secs as u64));
-                // Only trigger if this session is still active
                 if timeout_data.recording_session.load(Ordering::SeqCst) == session_id
                     && timeout_data.state.get() == AppState::Recording
                 {
@@ -190,8 +227,6 @@ fn handle_key_release(handle: &AppHandle, data: &Arc<AppData>) {
     // Invalidate timeout timer
     data.recording_session.fetch_add(1, Ordering::SeqCst);
 
-    // Collect audio and transcribe on a worker thread
-    // so the hotkey listener remains responsive.
     let audio_data = data.recorder.lock().stop();
     let handle = handle.clone();
     let data = data.clone();
@@ -201,14 +236,12 @@ fn handle_key_release(handle: &AppHandle, data: &Arc<AppData>) {
 }
 
 /// Stop recording, transcribe, and copy text to clipboard.
-/// Called from the timeout path (needs to stop the recorder itself).
 fn process_recording(handle: &AppHandle, data: &Arc<AppData>) {
     let audio_data = data.recorder.lock().stop();
     process_recording_with_audio(handle, data, audio_data);
 }
 
-/// Core transcription pipeline. Runs on a worker thread so the hotkey
-/// listener is never blocked during the 3-8 second whisper inference.
+/// Core transcription pipeline.
 fn process_recording_with_audio(handle: &AppHandle, data: &Arc<AppData>, audio_data: Vec<f32>) {
     let duration_ms = (audio_data.len() as u64 * 1000) / data.config.audio.sample_rate as u64;
 
@@ -221,7 +254,6 @@ fn process_recording_with_audio(handle: &AppHandle, data: &Arc<AppData>, audio_d
         return;
     }
 
-    // Check if audio has any significant content
     let max_amplitude = audio_data
         .iter()
         .map(|s| s.abs())
@@ -236,11 +268,10 @@ fn process_recording_with_audio(handle: &AppHandle, data: &Arc<AppData>, audio_d
         return;
     }
 
-    // Start transcription
     data.state.set(AppState::Transcribing);
     let _ = handle.emit("state-change", "transcribing");
 
-    if let Some(ref whisper) = data.whisper {
+    if let Some(whisper) = data.whisper.get() {
         match whisper.transcribe_with_config(
             &audio_data,
             &data.config.whisper.language,
@@ -248,7 +279,6 @@ fn process_recording_with_audio(handle: &AppHandle, data: &Arc<AppData>, audio_d
             data.config.whisper.threads,
         ) {
             Ok(text) => {
-                // Filter whisper hallucinations and empty results
                 let text = filter_hallucinations(&text);
                 if text.is_empty() {
                     log::info!("Empty transcription result (filtered)");
@@ -259,18 +289,14 @@ fn process_recording_with_audio(handle: &AppHandle, data: &Arc<AppData>, audio_d
                     return;
                 }
 
-                // Post-process punctuation
                 let text = punctuation::fix_punctuation(&text);
                 log::info!("Final text: \"{}\"", text);
 
-                // Show transcribed text in overlay
                 let _ = handle.emit("transcription-result", &text);
 
-                // Copy text to clipboard
                 match data.clipboard.copy_to_clipboard(&text) {
                     Ok(_) => {
                         log::info!("Text copied to clipboard, ready to paste");
-                        // Brief pause so user sees the text before "已复制" message
                         std::thread::sleep(std::time::Duration::from_millis(800));
                         let _ = handle.emit("clipboard-ready", &text);
                     }
@@ -280,7 +306,6 @@ fn process_recording_with_audio(handle: &AppHandle, data: &Arc<AppData>, audio_d
                     }
                 }
 
-                // Hold overlay so user can read, then dismiss
                 std::thread::sleep(std::time::Duration::from_millis(1200));
             }
             Err(e) => {
@@ -290,8 +315,8 @@ fn process_recording_with_audio(handle: &AppHandle, data: &Arc<AppData>, audio_d
             }
         }
     } else {
-        log::error!("Whisper engine not available");
-        let _ = handle.emit("error", "语音引擎未加载");
+        log::error!("Whisper engine not ready");
+        let _ = handle.emit("error", "语音模型正在加载中，请稍后再试");
         std::thread::sleep(std::time::Duration::from_secs(2));
     }
 
@@ -301,10 +326,9 @@ fn process_recording_with_audio(handle: &AppHandle, data: &Arc<AppData>, audio_d
     hide_overlay(handle);
 }
 
-/// Filter out common whisper hallucination patterns that appear on silence or noise.
+/// Filter out common whisper hallucination patterns.
 fn filter_hallucinations(text: &str) -> String {
     let trimmed = text.trim();
-    // Whisper produces these when input is silence/noise
     let hallucination_patterns = [
         "[BLANK_AUDIO]",
         "(music)",
@@ -339,7 +363,6 @@ fn handle_key_cancel(handle: &AppHandle, data: &Arc<AppData>) {
     }
 
     log::info!("Recording cancelled (combo or short press)");
-    // Stop recording and discard audio
     data.recorder.lock().stop();
     data.state.set(AppState::Idle);
     let _ = handle.emit("state-change", "idle");
@@ -350,14 +373,15 @@ fn handle_key_cancel(handle: &AppHandle, data: &Arc<AppData>) {
 fn show_overlay(handle: &AppHandle) {
     match handle.get_webview_window("overlay") {
         Some(window) => {
-            log::info!("Overlay: showing window (size={:?}, pos={:?})",
-                window.outer_size(), window.outer_position());
+            log::info!(
+                "Overlay: showing window (size={:?}, pos={:?})",
+                window.outer_size(),
+                window.outer_position()
+            );
             let _ = window.center();
             let _ = window.show();
             let _ = window.set_always_on_top(true);
             let _ = window.set_focus();
-            log::info!("Overlay: visible={:?}, focused={:?}",
-                window.is_visible(), window.is_focused());
         }
         None => {
             log::error!("Overlay window 'overlay' not found!");
