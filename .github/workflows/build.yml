@@ -51,6 +51,15 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install llvm -y
 
+      - name: Add swap space (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
       - name: Download whisper model
         shell: bash
         run: |
@@ -61,6 +70,8 @@ jobs:
       - name: Build (release, model embedded)
         working-directory: src-tauri
         shell: bash
+        env:
+          CARGO_BUILD_JOBS: "2"
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare artifact
