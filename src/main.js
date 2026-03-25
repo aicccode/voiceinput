@@ -71,7 +71,7 @@ listen('download-error', (event) => {
 });
 
 listen('model-ready', () => {
-    // Model loaded — overlay will be hidden by backend
+    updateState('ready');
 });
 
 // ---- State machine ----
@@ -95,7 +95,20 @@ function updateState(state) {
             statusText.textContent = '正在加载模型...';
             resultText.textContent = '';
             progressText.textContent = '';
+            progressBar.style.width = '0%';
             durationEl.textContent = '';
+            resetWaveform();
+            startLoadingAnimation();
+            break;
+
+        case 'ready':
+            overlay.classList.add('state-ready');
+            statusText.textContent = '模型加载完成';
+            resultText.textContent = '';
+            progressText.textContent = '按住右 Ctrl 开始说话';
+            progressBar.style.width = '100%';
+            durationEl.textContent = '';
+            stopLoadingAnimation();
             resetWaveform();
             break;
 
@@ -230,5 +243,30 @@ function stopWaveformAnimation() {
     }
 }
 
+// ---- Loading animation (indeterminate progress) ----
+
+let loadingInterval = null;
+let loadingDir = 1;
+let loadingPos = 0;
+
+function startLoadingAnimation() {
+    stopLoadingAnimation();
+    loadingPos = 0;
+    loadingDir = 1;
+    loadingInterval = setInterval(() => {
+        loadingPos += loadingDir * 2;
+        if (loadingPos >= 90) loadingDir = -1;
+        if (loadingPos <= 0) loadingDir = 1;
+        progressBar.style.width = (10 + loadingPos) + '%';
+    }, 50);
+}
+
+function stopLoadingAnimation() {
+    if (loadingInterval) {
+        clearInterval(loadingInterval);
+        loadingInterval = null;
+    }
+}
+
 // ---- Init ----
-updateState('waiting');
+updateState('idle');

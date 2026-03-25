@@ -116,6 +116,35 @@ html, body {
     animation: spin 0.8s linear infinite;
 }
 
+/* State: ready - green check with hint */
+.state-ready .mic-icon {
+    background: #22C55E;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") no-repeat center;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") no-repeat center;
+    mask-size: contain;
+    -webkit-mask-size: contain;
+    animation: none;
+}
+.state-ready .progress-container {
+    display: block;
+}
+.state-ready .progress-bar {
+    background: linear-gradient(90deg, #22C55E, #4ADE80);
+}
+.state-ready .progress-text {
+    display: block;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+}
+
+/* State: loading - show indeterminate progress */
+.state-loading .progress-container {
+    display: block;
+}
+.state-loading .progress-bar {
+    transition: width 0.05s linear;
+}
+
 /* State: result - green check */
 .state-result .mic-icon {
     background: #22C55E;

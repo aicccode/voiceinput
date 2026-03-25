@@ -87,11 +87,17 @@ fn init_model(handle: AppHandle, data: Arc<AppData>) {
     let cache_path = whisper_engine::model_cache_path();
     let needs_download = !whisper_engine::model_is_ready();
 
+    // Always show overlay during initialization
     if needs_download {
         log::info!("Model not found at {:?}, starting download...", cache_path);
         let _ = handle.emit("state-change", "downloading");
-        show_overlay(&handle);
+    } else {
+        log::info!("Loading model from cache...");
+        let _ = handle.emit("state-change", "loading");
+    }
+    show_overlay(&handle);
 
+    if needs_download {
         let url = model_downloader::get_download_url(&data.config.general.mirror);
         let handle_progress = handle.clone();
 
@@ -119,9 +125,7 @@ fn init_model(handle: AppHandle, data: Arc<AppData>) {
 
     // Load model
     log::info!("Loading whisper model...");
-    if needs_download {
-        let _ = handle.emit("state-change", "loading");
-    }
+    let _ = handle.emit("state-change", "loading");
 
     let model_path = cache_path.to_string_lossy().to_string();
     match whisper_engine::WhisperEngine::new(&model_path) {
@@ -129,15 +133,13 @@ fn init_model(handle: AppHandle, data: Arc<AppData>) {
             let _ = data.whisper.set(engine);
             log::info!("Whisper model loaded and ready");
             let _ = handle.emit("model-ready", true);
-            if needs_download {
-                hide_overlay(&handle);
-            }
+            // Show success hint for a few seconds before hiding
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            hide_overlay(&handle);
         }
         Err(e) => {
             log::error!("Failed to load whisper model: {}", e);
-            if needs_download {
-                let _ = handle.emit("download-error", format!("Failed to load model: {}", e));
-            }
+            let _ = handle.emit("download-error", format!("模型加载失败: {}", e));
         }
     }
 }
