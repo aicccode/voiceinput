@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceInput</title>
+    <link rel="stylesheet" href="styles/overlay.css">
+</head>
+<body>
+    <div id="overlay" class="overlay visible">
+        <div class="overlay-content">
+            <div id="status-icon" class="status-icon">
+                <div class="mic-icon"></div>
+            </div>
+            <canvas id="waveform" width="300" height="60"></canvas>
+            <div id="status-text" class="status-text">请开始说话...</div>
+            <div id="result-text" class="result-text"></div>
+            <div id="duration" class="duration"></div>
+        </div>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>

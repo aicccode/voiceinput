@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capabilities for VoiceInput","local":true,"windows":["*"],"permissions":["core:default","core:event:default","core:window:default","core:window:allow-show","core:window:allow-hide","core:window:allow-center","core:window:allow-set-focus","core:window:allow-set-always-on-top","shell:allow-open"]}}
