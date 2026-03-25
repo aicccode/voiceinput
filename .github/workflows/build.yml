@@ -16,14 +16,17 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact: voiceinput-linux-x86_64
             binary: voiceinput
+            release_name: voiceinput-linux-x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: voiceinput-windows-x86_64
             binary: voiceinput.exe
+            release_name: voiceinput-windows-x86_64.exe
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: voiceinput-macos-arm64
             binary: voiceinput
+            release_name: voiceinput-macos-arm64
 
     runs-on: ${{ matrix.os }}
     name: Build (${{ matrix.os }})
@@ -57,14 +60,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp src-tauri/target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
+          cp src-tauri/target/${{ matrix.target }}/release/${{ matrix.binary }} dist/${{ matrix.release_name }}
           ls -lh dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.binary }}
+          path: dist/${{ matrix.release_name }}
           retention-days: 30
 
   release:
@@ -84,7 +87,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/voiceinput-linux-x86_64/voiceinput
-            artifacts/voiceinput-windows-x86_64/voiceinput.exe
-            artifacts/voiceinput-macos-arm64/voiceinput
+            artifacts/voiceinput-linux-x86_64/voiceinput-linux-x86_64
+            artifacts/voiceinput-windows-x86_64/voiceinput-windows-x86_64.exe
+            artifacts/voiceinput-macos-arm64/voiceinput-macos-arm64
           generate_release_notes: true
