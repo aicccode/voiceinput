@@ -85,9 +85,6 @@ pub struct GeneralConfig {
     /// Model download mirror: "auto", "cn" (hf-mirror.com), "global" (huggingface.co)
     #[serde(default = "default_mirror")]
     pub mirror: String,
-    /// Custom model storage directory (empty = use default cache dir)
-    #[serde(default)]
-    pub model_path: String,
 }
 
 // Default value functions
@@ -167,7 +164,6 @@ impl Default for GeneralConfig {
             show_tray: true,
             log_level: default_log_level(),
             mirror: default_mirror(),
-            model_path: String::new(),
         }
     }
 }

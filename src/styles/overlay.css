@@ -185,19 +185,19 @@ html, body {
     display: block;
 }
 
-/* Path selection buttons */
-.path-select {
+/* Mirror selection buttons */
+.mirror-select {
     display: none;
     flex-direction: column;
     gap: 8px;
     width: 100%;
     align-items: center;
 }
-.state-select-path .path-select {
+.state-select-mirror .mirror-select {
     display: flex;
 }
 
-.path-btn {
+.mirror-btn {
     border: none;
     border-radius: 8px;
     padding: 8px 20px;
@@ -205,46 +205,62 @@ html, body {
     cursor: pointer;
     transition: opacity 0.2s, transform 0.1s;
     width: 100%;
-    max-width: 220px;
+    max-width: 240px;
     font-family: inherit;
 }
-.path-btn:hover:not(:disabled) {
+.mirror-btn:hover:not(:disabled) {
     opacity: 0.9;
     transform: scale(1.02);
 }
-.path-btn:active:not(:disabled) {
+.mirror-btn:active:not(:disabled) {
     transform: scale(0.98);
 }
-.path-btn:disabled {
+.mirror-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-.path-btn-primary {
+.mirror-btn-primary {
     background: linear-gradient(135deg, #3B82F6, #2563EB);
     color: white;
 }
-.path-btn-secondary {
+
+/* Retry / switch mirror buttons (shown on download failure) */
+.retry-actions {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
+}
+.state-download-failed .retry-actions {
+    display: flex;
+}
+
+.mirror-btn-secondary {
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-/* State: select-path - folder icon */
-.state-select-path .mic-icon {
+/* State: download-failed - red warning icon */
+.state-download-failed .mic-icon {
+    background: #EF4444;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z'/%3E%3C/svg%3E") no-repeat center;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z'/%3E%3C/svg%3E") no-repeat center;
+    mask-size: contain;
+    -webkit-mask-size: contain;
+    animation: none;
+}
+
+/* State: select-mirror - download icon */
+.state-select-mirror .mic-icon {
     background: #3B82F6;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z'/%3E%3C/svg%3E") no-repeat center;
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z'/%3E%3C/svg%3E") no-repeat center;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z'/%3E%3C/svg%3E") no-repeat center;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z'/%3E%3C/svg%3E") no-repeat center;
     mask-size: contain;
     -webkit-mask-size: contain;
     animation: pulse 1.5s ease-in-out infinite;
-}
-
-.state-select-path .progress-text {
-    display: block;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 11px;
-    word-break: break-all;
 }
 
 /* Download progress bar */

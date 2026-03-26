@@ -12,9 +12,15 @@ const waveformCanvas = document.getElementById('waveform');
 const ctx = waveformCanvas.getContext('2d');
 const progressBar = document.getElementById('progress-bar');
 const progressText = document.getElementById('progress-text');
-const pathSelect = document.getElementById('path-select');
-const selectPathBtn = document.getElementById('select-path-btn');
-const defaultPathBtn = document.getElementById('default-path-btn');
+const mirrorSelect = document.getElementById('mirror-select');
+const mirrorGlobalBtn = document.getElementById('mirror-global-btn');
+const mirrorCnBtn = document.getElementById('mirror-cn-btn');
+const retryActions = document.getElementById('retry-actions');
+const retryBtn = document.getElementById('retry-btn');
+const switchMirrorBtn = document.getElementById('switch-mirror-btn');
+
+// Track the last failed mirror so retry/switch knows what to do
+let lastFailedMirror = null;
 
 // Waveform state
 const WAVEFORM_BARS = 40;
@@ -69,57 +75,58 @@ listen('download-progress', (event) => {
 });
 
 listen('download-error', (event) => {
-    statusText.textContent = '下载失败: ' + event.payload;
-    progressText.textContent = '请检查网络后重启应用';
-    updateState('error');
+    const payload = event.payload;
+    if (payload && typeof payload === 'object') {
+        lastFailedMirror = payload.mirror;
+        statusText.textContent = '下载失败: ' + payload.message;
+    } else {
+        lastFailedMirror = null;
+        statusText.textContent = '下载失败: ' + payload;
+    }
+    updateState('download-failed');
 });
 
 listen('model-ready', () => {
     updateState('ready');
 });
 
-listen('need-select-path', (event) => {
-    updateState('select-path');
-    if (event.payload) {
-        progressText.textContent = '默认路径: ' + event.payload;
-    }
+listen('need-select-mirror', () => {
+    updateState('select-mirror');
 });
 
-// ---- Path selection buttons ----
+// ---- Mirror selection buttons ----
 
-selectPathBtn.addEventListener('click', async () => {
-    selectPathBtn.disabled = true;
-    defaultPathBtn.disabled = true;
-    statusText.textContent = '正在打开文件选择器...';
-
-    try {
-        const path = await invoke('cmd_select_model_path');
-        if (path) {
-            statusText.textContent = '准备下载...';
-        } else {
-            // User cancelled
-            statusText.textContent = '首次运行，请选择模型保存路径';
-            selectPathBtn.disabled = false;
-            defaultPathBtn.disabled = false;
-        }
-    } catch (e) {
-        statusText.textContent = '选择路径失败: ' + e;
-        selectPathBtn.disabled = false;
-        defaultPathBtn.disabled = false;
-    }
-});
-
-defaultPathBtn.addEventListener('click', async () => {
-    selectPathBtn.disabled = true;
-    defaultPathBtn.disabled = true;
+async function selectMirror(mirror) {
+    mirrorGlobalBtn.disabled = true;
+    mirrorCnBtn.disabled = true;
     statusText.textContent = '准备下载...';
 
     try {
-        await invoke('cmd_use_default_model_path');
+        await invoke('cmd_select_mirror', { mirror });
     } catch (e) {
         statusText.textContent = '操作失败: ' + e;
-        selectPathBtn.disabled = false;
-        defaultPathBtn.disabled = false;
+        mirrorGlobalBtn.disabled = false;
+        mirrorCnBtn.disabled = false;
+    }
+}
+
+mirrorGlobalBtn.addEventListener('click', () => selectMirror('global'));
+mirrorCnBtn.addEventListener('click', () => selectMirror('cn'));
+
+// ---- Retry / switch mirror buttons ----
+
+retryBtn.addEventListener('click', () => {
+    if (lastFailedMirror) {
+        selectMirror(lastFailedMirror);
+    }
+});
+
+switchMirrorBtn.addEventListener('click', () => {
+    // Switch to the other mirror
+    if (lastFailedMirror === 'cn') {
+        selectMirror('global');
+    } else {
+        selectMirror('cn');
     }
 });
 
@@ -129,15 +136,31 @@ function updateState(state) {
     overlay.className = 'overlay visible';
 
     switch (state) {
-        case 'select-path':
-            overlay.classList.add('state-select-path');
-            statusText.textContent = '首次运行，请选择模型保存路径';
+        case 'select-mirror':
+            overlay.classList.add('state-select-mirror');
+            statusText.textContent = '首次运行，请选择模型下载源';
             resultText.textContent = '';
             progressBar.style.width = '0%';
             durationEl.textContent = '';
             resetWaveform();
-            selectPathBtn.disabled = false;
-            defaultPathBtn.disabled = false;
+            mirrorGlobalBtn.disabled = false;
+            mirrorCnBtn.disabled = false;
+            break;
+
+        case 'download-failed':
+            overlay.classList.add('state-download-failed');
+            // statusText already set by download-error listener
+            resultText.textContent = '';
+            progressBar.style.width = '0%';
+            durationEl.textContent = '';
+            if (lastFailedMirror === 'cn') {
+                switchMirrorBtn.textContent = '切换到 Hugging Face (国际)';
+            } else {
+                switchMirrorBtn.textContent = '切换到 HF Mirror (国内加速)';
+            }
+            retryBtn.disabled = false;
+            switchMirrorBtn.disabled = false;
+            resetWaveform();
             break;
 
         case 'downloading':
@@ -329,4 +352,5 @@ function stopLoadingAnimation() {
 }
 
 // ---- Init ----
-updateState('idle');
+// All event listeners registered, tell backend to start model init
+invoke('cmd_init');
