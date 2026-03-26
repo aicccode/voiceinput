@@ -185,6 +185,68 @@ html, body {
     display: block;
 }
 
+/* Path selection buttons */
+.path-select {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
+}
+.state-select-path .path-select {
+    display: flex;
+}
+
+.path-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    width: 100%;
+    max-width: 220px;
+    font-family: inherit;
+}
+.path-btn:hover:not(:disabled) {
+    opacity: 0.9;
+    transform: scale(1.02);
+}
+.path-btn:active:not(:disabled) {
+    transform: scale(0.98);
+}
+.path-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.path-btn-primary {
+    background: linear-gradient(135deg, #3B82F6, #2563EB);
+    color: white;
+}
+.path-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* State: select-path - folder icon */
+.state-select-path .mic-icon {
+    background: #3B82F6;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z'/%3E%3C/svg%3E") no-repeat center;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z'/%3E%3C/svg%3E") no-repeat center;
+    mask-size: contain;
+    -webkit-mask-size: contain;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.state-select-path .progress-text {
+    display: block;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+    word-break: break-all;
+}
+
 /* Download progress bar */
 .progress-container {
     width: 100%;

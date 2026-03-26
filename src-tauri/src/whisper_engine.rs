@@ -148,20 +148,34 @@ fn validate_model_file(path: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Get the model cache path for the current platform
-pub fn model_cache_path() -> PathBuf {
-    let cache_dir = dirs::cache_dir()
+/// Get the default model cache path for the current platform
+pub fn default_model_dir() -> PathBuf {
+    dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("voiceinput")
-        .join("models");
-    cache_dir.join("ggml-small.bin")
+        .join("models")
 }
 
-/// Check if the cached model exists and is valid
-pub fn model_is_ready() -> bool {
-    let path = model_cache_path();
+/// Get model file path, using custom dir if provided (non-empty), otherwise default
+pub fn model_cache_path_custom(custom_dir: &str) -> PathBuf {
+    let dir = if custom_dir.is_empty() {
+        default_model_dir()
+    } else {
+        PathBuf::from(custom_dir)
+    };
+    dir.join("ggml-small.bin")
+}
+
+/// Get the model cache path for the current platform (default location)
+pub fn model_cache_path() -> PathBuf {
+    default_model_dir().join("ggml-small.bin")
+}
+
+/// Check if a model file at the given path exists and is valid
+pub fn model_is_ready_at(path: &std::path::Path) -> bool {
     if !path.exists() {
         return false;
     }
     validate_model_file(&path.to_string_lossy()).is_ok()
 }
+

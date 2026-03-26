@@ -1,6 +1,7 @@
 // VoiceInput Frontend - Overlay UI
 
 const { listen } = window.__TAURI__.event;
+const { invoke } = window.__TAURI__.core;
 
 // DOM Elements
 const overlay = document.getElementById('overlay');
@@ -11,6 +12,9 @@ const waveformCanvas = document.getElementById('waveform');
 const ctx = waveformCanvas.getContext('2d');
 const progressBar = document.getElementById('progress-bar');
 const progressText = document.getElementById('progress-text');
+const pathSelect = document.getElementById('path-select');
+const selectPathBtn = document.getElementById('select-path-btn');
+const defaultPathBtn = document.getElementById('default-path-btn');
 
 // Waveform state
 const WAVEFORM_BARS = 40;
@@ -74,15 +78,71 @@ listen('model-ready', () => {
     updateState('ready');
 });
 
+listen('need-select-path', (event) => {
+    updateState('select-path');
+    if (event.payload) {
+        progressText.textContent = '默认路径: ' + event.payload;
+    }
+});
+
+// ---- Path selection buttons ----
+
+selectPathBtn.addEventListener('click', async () => {
+    selectPathBtn.disabled = true;
+    defaultPathBtn.disabled = true;
+    statusText.textContent = '正在打开文件选择器...';
+
+    try {
+        const path = await invoke('cmd_select_model_path');
+        if (path) {
+            statusText.textContent = '准备下载...';
+        } else {
+            // User cancelled
+            statusText.textContent = '首次运行，请选择模型保存路径';
+            selectPathBtn.disabled = false;
+            defaultPathBtn.disabled = false;
+        }
+    } catch (e) {
+        statusText.textContent = '选择路径失败: ' + e;
+        selectPathBtn.disabled = false;
+        defaultPathBtn.disabled = false;
+    }
+});
+
+defaultPathBtn.addEventListener('click', async () => {
+    selectPathBtn.disabled = true;
+    defaultPathBtn.disabled = true;
+    statusText.textContent = '准备下载...';
+
+    try {
+        await invoke('cmd_use_default_model_path');
+    } catch (e) {
+        statusText.textContent = '操作失败: ' + e;
+        selectPathBtn.disabled = false;
+        defaultPathBtn.disabled = false;
+    }
+});
+
 // ---- State machine ----
 
 function updateState(state) {
     overlay.className = 'overlay visible';
 
     switch (state) {
+        case 'select-path':
+            overlay.classList.add('state-select-path');
+            statusText.textContent = '首次运行，请选择模型保存路径';
+            resultText.textContent = '';
+            progressBar.style.width = '0%';
+            durationEl.textContent = '';
+            resetWaveform();
+            selectPathBtn.disabled = false;
+            defaultPathBtn.disabled = false;
+            break;
+
         case 'downloading':
             overlay.classList.add('state-downloading');
-            statusText.textContent = '首次运行，正在下载语音模型...';
+            statusText.textContent = '正在下载语音模型...';
             resultText.textContent = '';
             progressText.textContent = '准备下载...';
             progressBar.style.width = '0%';
