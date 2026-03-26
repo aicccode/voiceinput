@@ -18,6 +18,9 @@ whisper-rs = "0.13"
 cpal = "0.15"
 arboard = { version = "3", features = ["wayland-data-control"] }
 rdev = "0.5"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "0.12"
 toml = "0.8"
 dirs = "6"
 log = "0.4"

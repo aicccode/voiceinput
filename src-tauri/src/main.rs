@@ -223,7 +223,9 @@ fn handle_key_press(handle: &AppHandle, data: &Arc<AppData>) {
 
     // Check if model is ready
     if data.whisper.get().is_none() {
+        show_overlay(handle);
         let _ = handle.emit("error", "语音模型正在加载中，请稍后再试");
+        hide_overlay_delayed(handle);
         return;
     }
 
